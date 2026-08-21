@@ -275,7 +275,7 @@ def prompt_risk_level_selection():
         "message": "Please select a risk category to view the matching failed transactions:",
         "options": [
             {"label": "High Risk (Score 80–100)", "query": "List high risk transactions", "badge": "high"},
-            {"label": "Moderate Risk (Score 40–79)", "query": "List moderate risk transactions", "badge": "Moderate"},
+            {"label": "Moderate Risk (Score 40–79)", "query": "List moderate risk transactions", "badge": "moderate"},
             {"label": "Low Risk (Score 0–39)", "query": "List low risk transactions", "badge": "low"},
         ],
     }
