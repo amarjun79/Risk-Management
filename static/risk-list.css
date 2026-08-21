@@ -1,1 +1,133 @@
-.risk-list-card h3{margin-top:0}.risk-filter-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}.risk-filter-button{border:1px solid #bfd9db;border-radius:999px;background:#fff;padding:10px 16px;color:#0b5f72;font:700 12px 'DM Sans',sans-serif;cursor:pointer}.risk-filter-button:hover{background:#eef8f7}.risk-transaction-list{margin-top:11px;border:1px solid #e2ecec;border-radius:8px;overflow:hidden}.risk-transaction-link{width:100%;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 12px;border:0;border-bottom:1px solid #e5eeee;background:#fff;color:#203f4a;text-align:left;cursor:pointer}.risk-transaction-link:last-child{border-bottom:0}.risk-transaction-link:hover{background:#f1f9f8}.risk-transaction-link b,.risk-transaction-link small{display:block}.risk-transaction-link small{margin-top:3px;color:#698089;font-size:11px;line-height:1.35}.risk-transaction-link .risk{flex:none}.empty-risk-list{padding:4px 12px;color:#698089;font-size:12px}
+.risk-list-card {
+    padding: 16px 18px;
+}
+
+.risk-list-card h3 {
+    margin-top: 0;
+    margin-bottom: 6px;
+    font-size: 15px;
+    color: #12323d;
+}
+
+.risk-filter-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 10px;
+}
+
+.risk-filter-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid #bfd9db;
+    border-radius: 8px;
+    background: #fff;
+    padding: 9px 15px;
+    color: #1a3b47;
+    font: 600 12.5px 'DM Sans', sans-serif;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.risk-filter-button .dot-indicator {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #0284c7;
+    flex-shrink: 0;
+}
+
+.risk-filter-button.high .dot-indicator {
+    background: #dc2626;
+}
+
+.risk-filter-button.moderate .dot-indicator {
+    background: #d97706;
+}
+
+.risk-filter-button.low .dot-indicator {
+    background: #059669;
+}
+
+.risk-filter-button:hover {
+    background: #f8fafc;
+    border-color: #0284c7;
+    transform: translateY(-1px);
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.08);
+}
+
+.risk-filter-button.high:hover {
+    border-color: #dc2626;
+    background: #fef2f2;
+}
+
+.risk-filter-button.moderate:hover {
+    border-color: #d97706;
+    background: #fffbeb;
+}
+
+.risk-filter-button.low:hover {
+    border-color: #059669;
+    background: #ecfdf5;
+}
+
+.risk-transaction-list {
+    margin-top: 12px;
+    border: 1px solid #e2ecec;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.risk-transaction-link {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 12px;
+    border: 0;
+    border-bottom: 1px solid #e5eeee;
+    background: #fff;
+    color: #203f4a;
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.12s ease;
+}
+
+.risk-transaction-link:last-child {
+    border-bottom: 0;
+}
+
+.risk-transaction-link:hover {
+    background: #f1f9f8;
+}
+
+.risk-transaction-link b,
+.risk-transaction-link small {
+    display: block;
+}
+
+.risk-transaction-link b {
+    font-size: 13px;
+    color: #12323d;
+}
+
+.risk-transaction-link small {
+    margin-top: 2px;
+    color: #698089;
+    font-size: 11.5px;
+    line-height: 1.35;
+}
+
+.risk-transaction-link .risk {
+    flex: none;
+}
+
+.empty-risk-list {
+    padding: 12px;
+    color: #698089;
+    font-size: 12.5px;
+    text-align: center;
+}

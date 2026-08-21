@@ -1,22 +1,158 @@
 [
   {
-    "section": "4.2 \u2014 Impossible Travel Velocity",
-    "text": "Decline or step up authentication when activity appears in geographically distant locations within a timeframe inconsistent with normal travel."
+    "section": "3. General Fraud Risk Principles",
+    "parent_section": "",
+    "text": "3. General Fraud Risk Principles Fraud investigations should use a combination of transaction facts, customer context, behavioral history, network indicators, and applicable policy requirements. No single indicator, by itself, necessarily establishes fraud. Analysts must distinguish between an indicator, a policy trigger, and a final fraud determination. An indicator may increase concern; a policy trigger establishes a required control when all stated conditions are satisfied; a fraud determination may require additional evidence. When evidence is incomplete or contradictory, the analyst should document the limitation and use the applicable review or escalation path rather than infer missing facts. 4. Transaction Velocity and Geographic Risk",
+    "chunk_index": 1
   },
   {
-    "section": "5.3 \u2014 Anonymizing Proxies",
-    "text": "Transactions originating from verified anonymizing proxies or Tor exit nodes require elevated fraud review and may be declined."
+    "section": "4.1 Geographic Consistency \u2014 General Guidance",
+    "parent_section": "",
+    "text": "4.1 Geographic Consistency \u2014 General Guidance Review transaction geography when a customer exhibits rapid movement between materially separated locations. Consider the timestamps, transaction type, available location data, and whether the earlier transaction was card present. The presence of geographically separated activity is an investigation signal. It becomes a policy trigger only when the conditions of a specific policy section are satisfied.",
+    "chunk_index": 2
   },
   {
-    "section": "3.1 \u2014 Card-not-present Risk",
-    "text": "Card-not-present purchases receive additional risk assessment when location, device, or spending behavior differs from the customer profile."
+    "section": "4.2 Impossible Travel Velocity",
+    "parent_section": "",
+    "text": "4.2 Impossible Travel Velocity POLICY TRIGGER \u2014 SECTION 4.2 Any Card-Not-Present (CNP) transaction occurring within 2 hours of a physical card swipe in a different geographical continent must be treated as an Impossible Travel Velocity event and routed for elevated fraud review. Required conditions: (1) the current transaction is classified as CNP; (2) a prior physical card swipe exists; (3) the elapsed time between the transactions is less than or equal to 2 hours; and (4) the locations are in different geographical continents. Required handling: When all four conditions are satisfied, classify the event as a policy-triggered elevated-risk finding. If the approved risk score for the investigation exceeds the high-risk threshold defined in Section 7, apply the corresponding action requirements in Section 8. Evidence required: Current transaction ID, current timestamp and location, current card-present classification, prior physical-card transaction timestamp and location, and enough geographic information to establish the continental difference.",
+    "chunk_index": 3
   },
   {
-    "section": "2.4 \u2014 Amount Anomaly",
-    "text": "A transaction materially above the customer's established average amount is a fraud-risk indicator."
+    "section": "4.3 Exceptions and Limitations",
+    "parent_section": "",
+    "text": "4.3 Exceptions and Limitations Do not classify a transaction under Section 4.2 when the prior transaction is not confirmed as physical card-present activity, when the time interval exceeds 2 hours, or when the available evidence does not establish different continents. Where geography cannot be determined reliably, route the case for manual review rather than infer a policy trigger. 5. Network and Anonymizing Proxy Risk",
+    "chunk_index": 4
   },
   {
-    "section": "6.1 \u2014 Customer Resolution",
-    "text": "When a transaction is declined by automated controls, ask the customer to verify identity and contact the bank to authorize future activity."
+    "section": "5.1 Network Risk \u2014 General Guidance",
+    "parent_section": "",
+    "text": "5.1 Network Risk \u2014 General Guidance Network intelligence may identify IP addresses associated with known proxies, Tor exit nodes, or other anonymization services. Such information is an investigative signal and should be combined with transaction attributes and policy thresholds.",
+    "chunk_index": 5
+  },
+  {
+    "section": "5.2 Proxy Intelligence Evidence",
+    "parent_section": "",
+    "text": "5.2 Proxy Intelligence Evidence The preferred evidence for proxy-related review includes the originating IP address, the proxy classification returned by an approved intelligence source, transaction amount, timestamp, transaction type, and any relevant customer context available to the investigation.",
+    "chunk_index": 6
+  },
+  {
+    "section": "5.3 Anonymizing Proxies",
+    "parent_section": "",
+    "text": "5.3 Anonymizing Proxies POLICY TRIGGER \u2014 SECTION 5.3 Transactions originating from known Tor exit nodes or proxy IPs carrying an amount higher than $500 trigger mandatory secondary fraud review. Required conditions: (1) the originating network endpoint is classified as a known Tor exit node or proxy IP; and (2) the transaction amount is greater than $500. Required handling: When both conditions are satisfied, route the transaction for mandatory secondary fraud review. The policy trigger does not, by itself, establish that the transaction is fraudulent. Evidence required: Transaction ID, amount, originating IP address, network classification, and timestamp. Where available, retain the source or confidence indicator associated with the proxy classification.",
+    "chunk_index": 7
+  },
+  {
+    "section": "5.4 Exceptions",
+    "parent_section": "",
+    "text": "5.4 Exceptions A transaction below or equal to $500 does not meet the amount threshold in Section 5.3. If proxy status is unknown or unavailable, do not treat the transaction as a confirmed proxy event. Document the missing evidence. 6. Transaction Amount and Behavioral Anomalies",
+    "chunk_index": 8
+  },
+  {
+    "section": "6.1 Customer Baseline",
+    "parent_section": "",
+    "text": "6.1 Customer Baseline Where customer-level historical data is available, compare the current transaction amount against the customer average transaction amount and recent transaction behavior.",
+    "chunk_index": 9
+  },
+  {
+    "section": "6.2 Unusual Amount Indicator",
+    "parent_section": "",
+    "text": "6.2 Unusual Amount Indicator A transaction that is materially above the customer baseline should be recorded as a behavioral anomaly. This is an investigative finding unless a separate policy explicitly establishes a mandatory action or threshold. Example calculation: Amount ratio = Current transaction amount / Customer average transaction amount Example: $1,450 / $120 = 12.08x the customer average transaction amount.",
+    "chunk_index": 10
+  },
+  {
+    "section": "6.3 Interpretation",
+    "parent_section": "",
+    "text": "6.3 Interpretation Amount anomalies should be considered together with other indicators such as geographic velocity, card-present status, proxy usage, merchant context, and recent transaction history. Avoid labeling a transaction as fraudulent solely because the amount is unusually high. 7. Risk Scoring and Classification The investigation system may use an approved risk-scoring model or configured business scoring logic. The model or scoring mechanism is authoritative for any numerical risk score displayed to an analyst. If the system provides a numerical score, display that score and the corresponding risk classification. If no numerical score is available, use a qualitative classification only when sufficient evidence exists. Risk Level Illustrative Score Range General Handling Low 0-39 Routine monitoring or closure when no policy trigger exists. Medium 40-79 Review available evidence and apply any triggered controls. High 80-100 Apply high-risk action requirements and escalate according to policy. The ranges above are illustrative for this mock document. A production implementation should use the organization-approved risk model and configuration. 8. Required Actions and Escalation",
+    "chunk_index": 11
+  },
+  {
+    "section": "8.1 High-Risk Transactions",
+    "parent_section": "",
+    "text": "8.1 High-Risk Transactions HIGH-RISK ACTION RULE When the approved risk assessment classifies an investigation as High Risk (risk level greater than 80), the required action is Immediate Card Freeze, subject to applicable operational controls and analyst confirmation.",
+    "chunk_index": 12
+  },
+  {
+    "section": "8.2 Secondary Fraud Review",
+    "parent_section": "",
+    "text": "8.2 Secondary Fraud Review When Section 5.3 is triggered, the transaction must enter the secondary fraud review process. A secondary review may also be required by other policy sections or operational procedures.",
+    "chunk_index": 13
+  },
+  {
+    "section": "8.3 Escalation",
+    "parent_section": "",
+    "text": "8.3 Escalation Escalate the investigation when the policy requires escalation, when a high-risk condition is established, or when evidence conflicts materially and cannot be resolved through available data sources.",
+    "chunk_index": 14
+  },
+  {
+    "section": "8.4 Customer Notification",
+    "parent_section": "",
+    "text": "8.4 Customer Notification Customer notification may be initiated through approved channels when supported by the applicable operational procedure. The investigation system should expose a notification action only when the workflow permits it.",
+    "chunk_index": 15
+  },
+  {
+    "section": "8.5 Action Traceability",
+    "parent_section": "",
+    "text": "8.5 Action Traceability Every displayed action should indicate the evidence or policy requirement that caused the action to be recommended. Do not expose an action as mandatory when the underlying policy condition is not satisfied. 9. Evidence and Analyst Documentation Investigation records should preserve sufficient evidence to allow another analyst to understand why a finding or action was produced. At minimum, record the Transaction ID, Customer ID, relevant transaction attributes, historical comparison evidence used, applicable policy section(s), triggered conditions, risk classification, and action taken or recommended. Where an AI-assisted workflow is used, the analyst-facing result should distinguish source facts from interpretation and should provide policy section references for policy-driven conclusions. 10. Retrieval and Policy Interpretation Notes",
+    "chunk_index": 16
+  },
+  {
+    "section": "10.1 Policy Retrieval",
+    "parent_section": "",
+    "text": "10.1 Policy Retrieval Semantic retrieval systems should retrieve the policy section most directly related to the observed transaction characteristic. Retrieval quality should be evaluated before a policy conclusion is generated.",
+    "chunk_index": 17
+  },
+  {
+    "section": "10.2 Context Preservation",
+    "parent_section": "",
+    "text": "10.2 Context Preservation When a policy rule is retrieved, sufficient surrounding context should be retained to preserve definitions, thresholds, exceptions, and required actions. A single sentence fragment should not be used when surrounding language changes the meaning of the rule.",
+    "chunk_index": 18
+  },
+  {
+    "section": "10.3 Corrective Retrieval",
+    "parent_section": "",
+    "text": "10.3 Corrective Retrieval If the first retrieval result is irrelevant, incomplete, or missing a key threshold or condition, reformulate the retrieval query using concrete transaction evidence and retrieve again before reaching a conclusion.",
+    "chunk_index": 19
+  },
+  {
+    "section": "10.4 Grounding",
+    "parent_section": "",
+    "text": "10.4 Grounding The investigation system must not invent a policy section, threshold, exception, or required action. If no directly applicable policy evidence is found, the system should state that the policy determination is inconclusive and identify the evidence gap.",
+    "chunk_index": 20
+  },
+  {
+    "section": "10.5 Policy Citation Format",
+    "parent_section": "",
+    "text": "10.5 Policy Citation Format For analyst-facing output, cite the relevant section number and title, for example: Risk Manual Section 4.2 - Impossible Travel Velocity or Risk Manual Section 5.3 \u2014 Anonymizing Proxies.",
+    "chunk_index": 21
+  },
+  {
+    "section": "Appendix A. Policy Evaluation Examples",
+    "parent_section": "",
+    "text": "Appendix A. Policy Evaluation Examples",
+    "chunk_index": 22
+  },
+  {
+    "section": "Example A1 \u2014 Impossible Travel Velocity Trigger",
+    "parent_section": "4.2 Impossible Travel Velocity",
+    "text": "Example A1 \u2014 Impossible Travel Velocity Trigger Current transaction: CNP, London, 2026-07-29 10:15 UTC. Prior transaction: physical card swipe, Minneapolis, 2026-07-29 09:45 UTC. Time difference: 30 minutes. Policy result: Section 4.2 conditions are satisfied if the locations are confirmed to be on different continents.",
+    "chunk_index": 23
+  },
+  {
+    "section": "Example A2 \u2014 Anonymizing Proxy Trigger",
+    "parent_section": "5.3 Anonymizing Proxies",
+    "text": "Example A2 \u2014 Anonymizing Proxy Trigger Current transaction: $1,450. Network: confirmed Tor exit node. Policy result: Section 5.3 conditions are satisfied because the proxy condition is true and the transaction amount is greater than $500. Mandatory secondary fraud review is required.",
+    "chunk_index": 24
+  },
+  {
+    "section": "Example A3 \u2014 Proxy But Below Threshold",
+    "parent_section": "5.3 Anonymizing Proxies",
+    "text": "Example A3 \u2014 Proxy But Below Threshold Current transaction: $425. Network: confirmed proxy IP. Policy result: Section 5.3 is not triggered because the amount does not exceed $500. The proxy remains an investigative signal and may be relevant to other policy sections.",
+    "chunk_index": 25
+  },
+  {
+    "section": "Example A4 \u2014 High-Risk Classification",
+    "parent_section": "8.1 High-Risk Transactions",
+    "text": "Example A4 \u2014 High-Risk Classification Risk score: 88/100. Policy result: The transaction is classified as High Risk under the illustrative scoring range in Section 7. Section 8.1 requires Immediate Card Freeze, subject to applicable operational controls and analyst confirmation.",
+    "chunk_index": 26
   }
 ]

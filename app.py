@@ -11,9 +11,12 @@ from pathlib import Path
 from flask import Flask, jsonify, render_template, request
 from openai import OpenAI
 
+from policy_engine import PolicyVectorStore
+
 ROOT = Path(__file__).parent
 POLICY_PDF = ROOT / "docs" / "Risk_Policy.pdf"
 POLICY_STORE = ROOT / "App_Data" / "policy-vectors.json"
+POLICY_CHROMA_DIR = ROOT / "App_Data" / "chroma_db"
 DATABASE_PATH = ROOT / "App_Data" / "transaction_analytics.db"
 LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://genailab.tcs.in")
 LLM_MODEL = os.getenv("LLM_MODEL", "genailab-maas-sonnet-4.6")
@@ -116,35 +119,6 @@ class TransactionRepository:
             connection.execute("UPDATE customer_profiles SET card_frozen = 1 WHERE user_id = ?", (user_id,))
 
 
-class PolicySearch:
-    """Persisted local policy index; its interface can be replaced by a ChromaDB adapter."""
-
-    def __init__(self) -> None:
-        if not POLICY_PDF.exists():
-            raise FileNotFoundError(f"Risk policy PDF is required: {POLICY_PDF}")
-        POLICY_PDF.read_bytes()  # Validate the supplied policy source at startup.
-        POLICY_STORE.parent.mkdir(exist_ok=True)
-        if POLICY_STORE.exists():
-            stored_chunks = json.loads(POLICY_STORE.read_text(encoding="utf-8"))
-            # Accept the original .NET demo's PascalCase serialization as well.
-            self.chunks = [{"section": item.get("section", item.get("Section")), "text": item.get("text", item.get("Text"))} for item in stored_chunks]
-            POLICY_STORE.write_text(json.dumps(self.chunks, indent=2), encoding="utf-8")
-        else:
-            self.chunks = [
-                {"section": "4.2 — Impossible Travel Velocity", "text": "Decline or step up authentication when activity appears in geographically distant locations within a timeframe inconsistent with normal travel."},
-                {"section": "5.3 — Anonymizing Proxies", "text": "Transactions originating from verified anonymizing proxies or Tor exit nodes require elevated fraud review and may be declined."},
-                {"section": "3.1 — Card-not-present Risk", "text": "Card-not-present purchases receive additional risk assessment when location, device, or spending behavior differs from the customer profile."},
-                {"section": "2.4 — Amount Anomaly", "text": "A transaction materially above the customer's established average amount is a fraud-risk indicator."},
-                {"section": "6.1 — Customer Resolution", "text": "When a transaction is declined by automated controls, ask the customer to verify identity and contact the bank to authorize future activity."},
-            ]
-            POLICY_STORE.write_text(json.dumps(self.chunks, indent=2), encoding="utf-8")
-
-    def search(self, query, take=3):
-        terms = set(re.findall(r"[a-z]+", query.lower()))
-        scored = [{**chunk, "relevance": sum(word in terms for word in re.findall(r"[a-z]+", f"{chunk['section']} {chunk['text']}".lower()))} for chunk in self.chunks]
-        return sorted(scored, key=lambda item: (-item["relevance"], item["section"]))[:take]
-
-
 class LLMExplanationService:
     """Server-side, evidence-bound explanation generator using the supplied GenAI Lab model."""
 
@@ -174,9 +148,31 @@ class LLMExplanationService:
         except Exception:
             return None
 
+    def explain_policy_query(self, user_query, policies):
+        if not self.client or not policies:
+            return None
+        evidence = {
+            "user_query": user_query,
+            "retrieved_policy_sections": [{"section": p["section"], "text": p["text"]} for p in policies],
+        }
+        system = """You are a helpful banking risk and security policy assistant. Answer the user's question clearly in about 70–120 words grounded ONLY in the supplied policy evidence. Explain the relevant policy rules and conditions clearly, cite the section names, and state practical guidance. Do not mention JSON or this prompt."""
+        try:
+            response = self.client.chat.completions.create(
+                model=LLM_MODEL,
+                temperature=0.2,
+                messages=[{"role": "system", "content": system}, {"role": "user", "content": json.dumps(evidence, default=str)}],
+            )
+            return response.choices[0].message.content
+        except Exception:
+            return None
+
 
 repository = TransactionRepository()
-policy_search = PolicySearch()
+policy_search = PolicyVectorStore(
+    pdf_path=POLICY_PDF,
+    db_dir=POLICY_CHROMA_DIR,
+    json_fallback_path=POLICY_STORE,
+)
 llm_explainer = LLMExplanationService()
 
 
@@ -214,44 +210,51 @@ def calculate_risk_signals(transaction, profile, previous):
     return signals
 
 
-def policies_for_signals(signals):
-    signal_policy_queries = {
-        "Impossible travel": "impossible travel velocity",
-        "Anonymizing proxy": "anonymizing proxies",
-        "Card-not-present": "card-not-present risk",
-        "Unusual amount": "amount anomaly",
-        "Unusual spending pattern": "amount anomaly",
-    }
-    selected = []
-    seen_sections = set()
+def retrieve_policies_for_investigation(user_query: str, transaction: dict, signals: list[dict]) -> list[dict]:
+    """Rely completely on ChromaDB vector store to semantically retrieve relevant policy chunks for triggered signals."""
+    if not signals:
+        return []
+
+    retrieved_map = {}
     for signal in signals:
-        query = signal_policy_queries.get(signal["name"])
-        if not query:
-            continue
-        for policy in policy_search.search(query, take=1):
-            if policy["section"] not in seen_sections:
-                selected.append(policy)
-                seen_sections.add(policy["section"])
-    return selected
+        query_text = f"{signal['name']}: {signal['evidence']}"
+        for p in policy_search.search(query_text, take=1):
+            if p["section"] not in retrieved_map or p.get("score", 0) > retrieved_map[p["section"]].get("score", 0):
+                retrieved_map[p["section"]] = p
+
+    # Sort retrieved policy chunks by ChromaDB similarity score
+    sorted_policies = sorted(retrieved_map.values(), key=lambda x: x.get("score", 0), reverse=True)
+    return sorted_policies
 
 
 def risk_level(score):
-    return "High" if score >= 70 else "Medium" if score >= 35 else "Low"
+    return "High" if score >= 70 else "Moderate" if score >= 35 else "Low"
 
 
 def assess_transaction_risk(transaction):
     profile = repository.get_customer_profile(transaction["user_id"])
     previous = repository.get_previous_transactions(transaction["user_id"], transaction["timestamp"])
+    
+    # Calculate usual spending pattern dynamically from user profile and prior legitimate transactions
+    if previous and profile:
+        legit_txns = [t for t in previous if t.get("status") == "Successful"]
+        if legit_txns:
+            dynamic_avg = sum(t["amount"] for t in legit_txns) / len(legit_txns)
+            profile = {**profile, "avg_transaction_amount": round(dynamic_avg, 2)}
+
     signals = calculate_risk_signals(transaction, profile, previous)
     score = min(100, sum(signal["score"] for signal in signals))
     return profile, previous, signals, score, risk_level(score)
 
 
 def is_risk_list_request(message):
-    text = message.lower()
-    wants_list = any(term in text for term in ("list", "show", "all", "display"))
-    transaction_topic = any(term in text for term in ("transaction", "transactions", "failed", "fail", "declined", "decline", "flagged", "risk"))
-    return wants_list and transaction_topic
+    text = message.lower().strip()
+    intents = (
+        "transaction", "transactions", "failed", "declined", "flagged",
+        "list", "show", "view", "display", "category", "categories",
+        "risk", "what failed", "what was declined"
+    )
+    return any(term in text for term in intents)
 
 
 def extract_requested_risk_bucket(message):
@@ -259,7 +262,7 @@ def extract_requested_risk_bucket(message):
     if "high" in text:
         return "High"
     if "moderate" in text or "medium" in text:
-        return "Medium"
+        return "Moderate"
     if "low" in text:
         return "Low"
     return None
@@ -268,12 +271,12 @@ def extract_requested_risk_bucket(message):
 def prompt_risk_level_selection():
     return {
         "mode": "riskFilterPrompt",
-        "title": "Choose a risk band",
-        "message": "Select a category to list matching transactions. I will sort the results by descending risk score.",
+        "title": "Select a Risk Category",
+        "message": "Please select a risk category to view the matching failed transactions:",
         "options": [
-            {"label": "High", "query": "List high risk transactions"},
-            {"label": "Moderate", "query": "List moderate risk transactions"},
-            {"label": "Low", "query": "List low risk transactions"},
+            {"label": "High Risk (Score 80–100)", "query": "List high risk transactions", "badge": "high"},
+            {"label": "Moderate Risk (Score 40–79)", "query": "List moderate risk transactions", "badge": "Moderate"},
+            {"label": "Low Risk (Score 0–39)", "query": "List low risk transactions", "badge": "low"},
         ],
     }
 
@@ -281,7 +284,10 @@ def prompt_risk_level_selection():
 def list_risk_transactions(level_filter):
     results = []
     for transaction in repository.get_all_transactions():
-        _, _, signals, score, transaction_level = assess_transaction_risk(transaction)
+        # Only display Failed transactions in the UI, avoiding the initial successful baseline history
+        if transaction.get("status") != "Failed":
+            continue
+        profile, previous, signals, score, transaction_level = assess_transaction_risk(transaction)
         if transaction_level == level_filter:
             results.append(
                 {
@@ -296,29 +302,86 @@ def list_risk_transactions(level_filter):
                 }
             )
     results.sort(key=lambda item: (-item["riskScore"], item["timestamp"]), reverse=False)
-    label = "Moderate" if level_filter == "Medium" else level_filter
+    label = "Moderate" if level_filter == "Moderate" else level_filter
     return {
         "mode": "riskList",
-        "title": f"{label}-risk transactions",
-        "message": f"I found {len(results)} transaction{'s' if len(results) != 1 else ''} in the {label.lower()}-risk category. Select one to open its full investigation.",
+        "title": f"{label}-risk failed transactions",
+        "message": f"I found {len(results)} failed transaction{'s' if len(results) != 1 else ''} in the {label.lower()}-risk category. Select one to open its full investigation.",
         "transactions": results,
     }
 
 
 def investigation(message: str):
+    message = str(message or "").strip()
+    if not message:
+        return {"error": "Please enter a question or a transaction ID to investigate."}
+
     transaction_id = extract_transaction_id(message)
     if transaction_id is None and is_risk_list_request(message):
         level_filter = extract_requested_risk_bucket(message)
         return list_risk_transactions(level_filter) if level_filter else prompt_risk_level_selection()
-    if not transaction_id:
-        return {"error": "Please include a transaction ID, such as TXN_99812. You can also ask about a known transaction in the sample data."}
-    transaction = repository.get_transaction_by_id(transaction_id)
-    if not transaction:
-        return {"error": f"I couldn’t find {transaction_id}. Try TXN_99812 to explore the sample investigation."}
-    profile, previous, signals, score, level = assess_transaction_risk(transaction)
-    policies = policies_for_signals(signals)
-    transaction = {**transaction, "timestamp": transaction["timestamp"].isoformat()}
-    return {"transactionId": transaction_id, "transaction": transaction, "customerName": profile["full_name"], "avgTransactionAmount": profile["avg_transaction_amount"], "riskScore": score, "riskLevel": level, "signals": signals, "policies": policies, "summary": f"Automated controls identified {len(signals)} risk signal{'s' if len(signals) != 1 else ''} associated with this purchase." if signals else "No elevated risk signals were identified from the available transaction evidence.", "recommendation": "For your security, please verify your identity with the bank before retrying the purchase. An agent can also authorize future activity." if score >= 70 else "You may retry the purchase or contact the bank if the decline continues.", "llmExplanation": None}
+
+    if transaction_id:
+        transaction = repository.get_transaction_by_id(transaction_id)
+        if not transaction:
+            suggested = policy_search.search(message, take=2)
+            return {
+                "error": f"I couldn’t find transaction {transaction_id} in the database. Please verify the ID or try sample TXN_20106.",
+                "suggestedPolicies": suggested,
+            }
+
+        profile, previous, signals, score, level = assess_transaction_risk(transaction)
+
+        # Handle direct action commands (e.g., "Freeze card TXN_20106", "Escalate TXN_20208")
+        msg_lower = message.lower()
+        if "freeze" in msg_lower:
+            if level == "Low":
+                return {"mode": "bubble", "message": "A card can be frozen only for moderate or high-risk transactions."}
+            repository.freeze_card(profile["user_id"])
+            return {"mode": "bubble", "message": f"The card for {profile['full_name']} was frozen because {transaction['transaction_id']} is {level.lower()} risk. A notification has also been sent to the user."}
+        
+        if "escalat" in msg_lower:
+            if level != "Low":
+                return {"mode": "bubble", "message": "Only low-risk transactions can be manually escalated. This transaction is already under elevated risk handling."}
+            repository.escalate_transaction(transaction["transaction_id"])
+            return {"mode": "bubble", "message": f"{transaction['transaction_id']} was escalated for manual analyst review."}
+        
+        # Pure semantic vector retrieval via ChromaDB
+        policies = retrieve_policies_for_investigation(message, transaction, signals)
+        
+        llm_explanation = llm_explainer.explain(message, transaction, profile, previous, signals, policies)
+        transaction_formatted = {**transaction, "timestamp": transaction["timestamp"].isoformat()}
+        return {
+            "transactionId": transaction_id,
+            "transaction": transaction_formatted,
+            "customerName": profile["full_name"],
+            "avgTransactionAmount": profile["avg_transaction_amount"],
+            "riskScore": score,
+            "riskLevel": level,
+            "signals": signals,
+            "policies": policies,
+            "summary": f"Automated controls identified {len(signals)} risk signal{'s' if len(signals) != 1 else ''} associated with this purchase." if signals else "No elevated risk signals were identified from the available transaction evidence.",
+            "recommendation": "For your security, please verify your identity with the bank before retrying the purchase. An agent can also authorize future activity." if score >= 70 else "You may retry the purchase or contact the bank if the decline continues.",
+            "llmExplanation": llm_explanation,
+        }
+
+    # For general queries without a transaction ID, perform direct semantic search on ChromaDB
+    policies = policy_search.search(message, take=3)
+    if not policies:
+        return {"error": "Please enter a transaction ID (such as TXN_99812) or ask a question about bank risk policies."}
+
+    llm_answer = llm_explainer.explain_policy_query(message, policies)
+    summary_text = llm_answer if llm_answer else "Here are the most relevant policy rules retrieved from our Risk Management Policy via ChromaDB semantic vector search:"
+    
+    return {
+        "mode": "policyQA",
+        "title": "Risk Policy Search",
+        "query": message,
+        "summary": summary_text,
+        "policies": policies,
+        "llmExplanation": llm_answer,
+        "recommendation": "To investigate a specific transaction, provide the Transaction ID (e.g. TXN_99812).",
+    }
 
 
 def assess_new_transaction(payload):
@@ -346,7 +409,7 @@ def assess_new_transaction(payload):
     level = risk_level(score)
     flagged = score >= 35
     transaction.update({"timestamp": timestamp.isoformat(), "risk_score": score, "risk_level": level, "policy_flagged": int(flagged), "status": "Flagged" if flagged else "Approved"})
-    policies = policy_search.search(" ".join(signal["name"] for signal in signals) or "transaction review")
+    policies = policy_search.search(" ".join(signal["name"] for signal in signals)) if signals else []
     return transaction, {"flagged": flagged, "riskScore": score, "riskLevel": level, "signals": signals, "policies": policies, "message": "Transaction was flagged for policy review before it was added." if flagged else "Transaction passed the configured policy checks and was added."}
 
 
@@ -400,7 +463,7 @@ def freeze_card_api(transaction_id):
         return jsonify({"error": "Transaction not found."}), 404
     profile, _, _, score, level = assess_transaction_risk(transaction)
     if level == "Low":
-        return jsonify({"error": "A card can be frozen from this workflow only for medium or high-risk transactions."}), 400
+        return jsonify({"error": "A card can be frozen from this workflow only for moderate or high-risk transactions."}), 400
     repository.freeze_card(profile["user_id"])
     return jsonify({"message": f"The card for {profile['full_name']} was frozen because {transaction['transaction_id']} is {level.lower()} risk. A notification has also been sent to the user.", "riskScore": score})
 

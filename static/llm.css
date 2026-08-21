@@ -1,1 +1,20 @@
-.llm-explanation{margin:14px 0;padding:11px 12px;background:#eef6fb;border-left:3px solid #0a6975;border-radius:0 7px 7px 0;color:#294b58}.llm-explanation b{font-size:11px}.llm-explanation p{margin:5px 0 0;white-space:pre-line;font-size:12px;line-height:1.55}
+.llm-explanation {
+    margin: 6px 0;
+    padding: 6px 10px;
+    background: #eef6fb;
+    border-left: 3px solid #0a6975;
+    border-radius: 0 6px 6px 0;
+    color: #294b58;
+}
+.llm-explanation b {
+    font-size: 10.5px;
+    color: #084952;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+.llm-explanation p {
+    margin: 2px 0 0;
+    white-space: pre-line;
+    font-size: 11.5px;
+    line-height: 1.4;
+}
