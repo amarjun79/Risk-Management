@@ -1,0 +1,6 @@
+{
+  "python.defaultInterpreterPath": "C:\\Users\\Apollo\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+  "python.analysis.extraPaths": [
+    "${workspaceFolder}"
+  ]
+}
