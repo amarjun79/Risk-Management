@@ -1,4 +1,4 @@
-"""Sentinel transaction decline chatbot — a self-contained Flask demo."""
+"""RiskLens transaction decline chatbot — a self-contained Flask demo."""
 from __future__ import annotations
 
 import json
@@ -214,6 +214,27 @@ def calculate_risk_signals(transaction, profile, previous):
     return signals
 
 
+def policies_for_signals(signals):
+    signal_policy_queries = {
+        "Impossible travel": "impossible travel velocity",
+        "Anonymizing proxy": "anonymizing proxies",
+        "Card-not-present": "card-not-present risk",
+        "Unusual amount": "amount anomaly",
+        "Unusual spending pattern": "amount anomaly",
+    }
+    selected = []
+    seen_sections = set()
+    for signal in signals:
+        query = signal_policy_queries.get(signal["name"])
+        if not query:
+            continue
+        for policy in policy_search.search(query, take=1):
+            if policy["section"] not in seen_sections:
+                selected.append(policy)
+                seen_sections.add(policy["section"])
+    return selected
+
+
 def risk_level(score):
     return "High" if score >= 70 else "Medium" if score >= 35 else "Low"
 
@@ -229,34 +250,75 @@ def assess_transaction_risk(transaction):
 def is_risk_list_request(message):
     text = message.lower()
     wants_list = any(term in text for term in ("list", "show", "all", "display"))
-    risk_topic = any(term in text for term in ("failed", "fail", "declined", "decline", "flagged", "risk"))
-    return wants_list and risk_topic
+    transaction_topic = any(term in text for term in ("transaction", "transactions", "failed", "fail", "declined", "decline", "flagged", "risk"))
+    return wants_list and transaction_topic
 
 
-def list_risk_transactions():
+def extract_requested_risk_bucket(message):
+    text = message.lower()
+    if "high" in text:
+        return "High"
+    if "moderate" in text or "medium" in text:
+        return "Medium"
+    if "low" in text:
+        return "Low"
+    return None
+
+
+def prompt_risk_level_selection():
+    return {
+        "mode": "riskFilterPrompt",
+        "title": "Choose a risk band",
+        "message": "Select a category to list matching transactions. I will sort the results by descending risk score.",
+        "options": [
+            {"label": "High", "query": "List high risk transactions"},
+            {"label": "Moderate", "query": "List moderate risk transactions"},
+            {"label": "Low", "query": "List low risk transactions"},
+        ],
+    }
+
+
+def list_risk_transactions(level_filter):
     results = []
     for transaction in repository.get_all_transactions():
-        _, _, signals, score, level = assess_transaction_risk(transaction)
-        if score >= 35:
-            results.append({"transactionId": transaction["transaction_id"], "merchant": transaction["merchant"], "amount": transaction["amount"], "location": transaction["location"], "timestamp": transaction["timestamp"].isoformat(), "riskScore": score, "riskLevel": level, "reason": signals[0]["evidence"] if signals else "Risk score meets the review threshold."})
-    return {"mode": "riskList", "title": "Medium and high-risk transactions", "message": f"I found {len(results)} transaction{'s' if len(results) != 1 else ''} meeting the medium/high-risk threshold. Select one to open its full investigation.", "transactions": results}
+        _, _, signals, score, transaction_level = assess_transaction_risk(transaction)
+        if transaction_level == level_filter:
+            results.append(
+                {
+                    "transactionId": transaction["transaction_id"],
+                    "merchant": transaction["merchant"],
+                    "amount": transaction["amount"],
+                    "location": transaction["location"],
+                    "timestamp": transaction["timestamp"].isoformat(),
+                    "riskScore": score,
+                    "riskLevel": transaction_level,
+                    "reason": signals[0]["evidence"] if signals else "Risk score meets the review threshold.",
+                }
+            )
+    results.sort(key=lambda item: (-item["riskScore"], item["timestamp"]), reverse=False)
+    label = "Moderate" if level_filter == "Medium" else level_filter
+    return {
+        "mode": "riskList",
+        "title": f"{label}-risk transactions",
+        "message": f"I found {len(results)} transaction{'s' if len(results) != 1 else ''} in the {label.lower()}-risk category. Select one to open its full investigation.",
+        "transactions": results,
+    }
 
 
 def investigation(message: str):
     transaction_id = extract_transaction_id(message)
     if transaction_id is None and is_risk_list_request(message):
-        return list_risk_transactions()
+        level_filter = extract_requested_risk_bucket(message)
+        return list_risk_transactions(level_filter) if level_filter else prompt_risk_level_selection()
     if not transaction_id:
         return {"error": "Please include a transaction ID, such as TXN_99812. You can also ask about a known transaction in the sample data."}
     transaction = repository.get_transaction_by_id(transaction_id)
     if not transaction:
         return {"error": f"I couldn’t find {transaction_id}. Try TXN_99812 to explore the sample investigation."}
     profile, previous, signals, score, level = assess_transaction_risk(transaction)
-    policies = policy_search.search(message + " " + " ".join(signal["name"] for signal in signals))
-    llm_explanation = llm_explainer.explain(message, transaction, profile, previous, signals, policies)
+    policies = policies_for_signals(signals)
     transaction = {**transaction, "timestamp": transaction["timestamp"].isoformat()}
-    detailed_explanation = ("The transaction was assessed against the customer's usual activity and the retrieved risk policy. " + " ".join(signal["evidence"] for signal in signals) + " Together, these indicators increased the fraud-risk assessment and triggered a review decision.") if signals else "The available transaction and customer-history evidence did not produce a material policy risk signal."
-    return {"transactionId": transaction_id, "transaction": transaction, "riskScore": score, "riskLevel": level, "signals": signals, "policies": policies, "summary": f"Automated controls identified {len(signals)} risk signal{'s' if len(signals) != 1 else ''} associated with this purchase." if signals else "No elevated risk signals were identified from the available transaction evidence.", "recommendation": "For your security, please verify your identity with the bank before retrying the purchase. An agent can also authorize future activity." if score >= 70 else "You may retry the purchase or contact the bank if the decline continues.", "llmExplanation": llm_explanation or detailed_explanation}
+    return {"transactionId": transaction_id, "transaction": transaction, "customerName": profile["full_name"], "avgTransactionAmount": profile["avg_transaction_amount"], "riskScore": score, "riskLevel": level, "signals": signals, "policies": policies, "summary": f"Automated controls identified {len(signals)} risk signal{'s' if len(signals) != 1 else ''} associated with this purchase." if signals else "No elevated risk signals were identified from the available transaction evidence.", "recommendation": "For your security, please verify your identity with the bank before retrying the purchase. An agent can also authorize future activity." if score >= 70 else "You may retry the purchase or contact the bank if the decline continues.", "llmExplanation": None}
 
 
 def assess_new_transaction(payload):
@@ -290,7 +352,13 @@ def assess_new_transaction(payload):
 
 @app.get("/")
 def index():
-    return render_template("index.html")
+    return render_template("index.html", admin=False)
+
+
+@app.get("/admin")
+def admin():
+    """Direct-access transaction ledger; it is intentionally not linked from the public UI."""
+    return render_template("admin.html")
 
 
 @app.post("/api/investigate")
@@ -334,7 +402,7 @@ def freeze_card_api(transaction_id):
     if level == "Low":
         return jsonify({"error": "A card can be frozen from this workflow only for medium or high-risk transactions."}), 400
     repository.freeze_card(profile["user_id"])
-    return jsonify({"message": f"The card for {profile['full_name']} was frozen because {transaction['transaction_id']} is {level.lower()} risk.", "riskScore": score})
+    return jsonify({"message": f"The card for {profile['full_name']} was frozen because {transaction['transaction_id']} is {level.lower()} risk. A notification has also been sent to the user.", "riskScore": score})
 
 
 if __name__ == "__main__":
