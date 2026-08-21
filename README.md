@@ -1,36 +1,121 @@
-# RiskLens — Transaction Decline Investigation Chatbot
+# RiskLens — AI Transaction Decline Investigation Chatbot
 
-A Python/Flask demo for explaining declined card transactions. The conversational interface normalizes transaction IDs, obtains structured evidence through repository services, calculates deterministic fraud signals, retrieves the three most relevant local policy sections, and returns a customer-friendly investigation card.
+RiskLens is an intelligent, evidence-grounded banking chatbot designed to investigate, explain, and take action on declined card transactions. It combines deterministic fraud scoring, pure semantic vector retrieval via ChromaDB, dynamic customer baseline calculation, and LLM-assisted investigation summaries within a single-screen responsive interface.
 
-## Run
+---
+
+## Key Features
+
+- **Pure ChromaDB Semantic Retrieval**:
+  - Automatically parses and indexes the risk policy PDF (`docs/Risk_Policy.pdf`) into dense vector embeddings (`all-MiniLM-L6-v2`) in `App_Data/chroma_db`.
+  - Operates purely on dense vector similarity, resolving specific test scenarios to authoritative policy sections (e.g. *Section 4.2 Impossible Travel Velocity*, *Section 5.3 Anonymizing Proxies*, *Section 6.2 Unusual Amount Indicator*).
+  - Handles general policy questions when no specific transaction ID is provided.
+
+- **Dynamic Customer Baseline & Fraud Engine**:
+  - Computes fraud signals across geographic impossible travel velocity, anonymizing Tor/proxy IPs, Card-Not-Present (CNP) channels, spend spike ratios against baseline average amounts, and 24-hour spend spikes.
+  - Automatically classifies risk scores into three distinct bands:
+    - 🔴 **High Risk** (`Score 80–100`)
+    - 🟡 **Moderate Risk** (`Score 40–79`)
+    - 🟢 **Low Risk** (`Score 0–39`)
+  - **4-Transaction Baseline History**: The first 4 transactions for each customer are legitimate successful baselines used exclusively for calculating usual spending patterns, average transaction amounts, and velocity; they are automatically avoided from the failed risk lists.
+
+- **Interactive Single-Screen Bento UI**:
+  - **Compact KPI Strip**: 4-column metric bar displaying Amount & Baseline, Location & Channel, IP & Proxy, and Status & Timestamp.
+  - **2-Column Signals Grid**: Displays point score badges, evidence snippets, and clear explanations with full text wrapping.
+  - **Expandable Related Policy Rules**: Stacked full-width policy cards showing ChromaDB match percentages (`81% match`) with click-to-expand rule details.
+  - **Interactive Action Buttons**: Clicking **"Freeze card"** or **"Escalate review"** automatically posts a chat query bubble and returns the confirmation as a new response bubble.
+  - **Clean Transaction Assessment**: Clean transactions with no risk triggers suppress policy sections for a focused summary.
+
+- **Interactive Category Selector**:
+  - General queries (e.g., `list transactions`, `transactions`, `failed transactions`) return interactive category buttons (High Risk, Moderate Risk, Low Risk) that trigger filtered lists upon clicking.
+
+- **LLM Evidence-Bound Explanation Service**:
+  - Integrates with GenAI Lab / OpenAI API (`genailab-maas-sonnet-4.6`) to generate customer-friendly investigation summaries strictly grounded in verified transaction evidence and retrieved policy sections.
+
+---
+
+## Quickstart
+
+### 1. Installation
+
+Ensure Python 3.10+ is installed, then install project dependencies:
 
 ```powershell
-python app.py
+pip install -r requirements.txt
 ```
 
-Open `http://127.0.0.1:5000` and ask: `Why was txn99812 declined?`
+### 2. Configure LLM (Optional)
 
-Use the **Transactions** tab to view all transactions grouped by customer. The **Add transaction** form checks the record against the configured policy signals before storing it; transactions with a risk score of 35 or more are flagged immediately and include the supporting policy evidence.
-
-## Demo architecture
-
-- `app.py` exposes the UI, `/api/investigate` chat API, SQLite repository, risk rules, and workflow.
-- `App_Data/transaction_analytics.db` is created automatically on the first run from `data/schema.sql` and `data/demo_data.sql`. Edit or replace it with your own SQLite data without changing application code.
-- `templates/index.html` contains the conversational interface, while `static/site.css` provides the banking theme.
-- On startup `app.py` validates `docs/Risk_Policy.pdf` and persists a lightweight local policy index in `App_Data/policy-vectors.json`.
-
-SQLite is included with Python and stores analytical data locally; swap `TransactionRepository` for PostgreSQL later if needed. Production can replace `PolicySearch` with a PDF chunker/embedding client backed by ChromaDB.
-
-## LLM configuration
-
-The investigation response can use the supplied GenAI Lab model (`genailab-maas-sonnet-4.6`) at `https://genailab.tcs.in`. Set the key only in your terminal before running the server—never commit it or send it to the browser.
+Set environment variables in your terminal to enable AI-generated investigation explanations:
 
 ```powershell
 $env:TCS_GENAILAB_API_KEY = "sk-hi12MawxfIhRmb5kiRELUQ"
 $env:LLM_BASE_URL = "https://genailab.tcs.in"
 $env:LLM_MODEL = "genailab-maas-sonnet-4.6"
-pip install -r requirements.txt
+```
+
+*(If no LLM key is configured, the deterministic risk engine and ChromaDB vector search remain fully functional.)*
+
+### 3. Run the Application
+
+```powershell
 python app.py
 ```
 
-The backend passes the model only the user question, transaction and profile data, calculated risk signals, and the retrieved policy sections. If the key is not configured or the LLM is unavailable, the deterministic evidence-based investigation remains available. Any key that was previously committed to this README should be rotated before use.
+Open your browser and navigate to **[http://127.0.0.1:5000](http://127.0.0.1:5000)**.
+
+---
+
+## Example Queries to Try
+
+| Goal | Query | Description |
+| :--- | :--- | :--- |
+| **High Risk Investigation** | `Why was TXN_20106 declined?` | Investigates Marcus Vance's London transaction ($1,450, Tor proxy, 30 min travel velocity). Returns 5 risk signals and Section 4.2 & 5.3 rules. |
+| **Moderate Risk Investigation** | `Why was TXN_20307 declined?` | Investigates David Chen's Apple Store purchase ($720, proxy over $500). |
+| **Low Risk Investigation** | `Why was TXN_20208 declined?` | Investigates Elena Rostova's Uber purchase ($75, CNP). |
+| **Clean Baseline Transaction** | `Check TXN_20101` | Analyzes Marcus Vance's legitimate $78.50 Target swipe. Displays clean assessment without triggered policies. |
+| **Risk Category Selector** | `list transactions` | Returns interactive selection buttons for High, Moderate, and Low risk failed transactions. |
+| **High Risk List** | `List all high risk transactions` | Lists all failed transactions in the High Risk category (sorted by descending risk score). |
+| **Moderate Risk List** | `List all moderate risk transactions` | Lists all failed transactions in the Moderate Risk category. |
+| **Policy Search** | `What is the policy for impossible travel velocity?` | Performs semantic search against ChromaDB and summarizes Section 4.2 requirements and conditions. |
+| **Card Action** | `Freeze card TXN_20106` | Freezes the card for user Marcus Vance and returns a confirmation chat bubble. |
+
+---
+
+## Project Structure
+
+```
+RiskPay/
+├── App_Data/                          # Persistent storage (auto-initialized)
+│   ├── chroma_db/                     # ChromaDB persistent vector database
+│   ├── policy-vectors.json            # Synchronized JSON fallback cache
+│   └── transaction_analytics.db       # SQLite transactional database
+├── data/
+│   ├── schema.sql                     # Database schema (customer_profiles & transactions)
+│   └── demo_data.sql                  # 5 sample users and 40 transactions
+├── docs/
+│   └── Risk_Policy.pdf                # Authoritative U.S. Bank sample policy manual
+├── static/
+│   ├── site.css                       # Primary banking theme & single-screen layout
+│   ├── risk-list.css                  # Category buttons & transaction list styling
+│   ├── analyst-actions.css            # Action buttons styling (freeze/escalate)
+│   ├── policy-links.css               # Expandable accordion rules styling
+│   └── llm.css                        # AI explanation container styling
+├── templates/
+│   ├── index.html                     # Conversational chatbot interface
+│   └── admin.html                     # Analytical ledger viewer
+├── app.py                             # Flask server, repository, risk rules & routing
+├── policy_engine.py                   # PDF extraction & ChromaDB vector store
+├── requirements.txt                   # Project Python dependencies
+└── README.md                          # Project documentation
+```
+
+---
+
+## API Endpoints
+
+- `POST /api/investigate`: Chat endpoint processing natural language questions, transaction investigations, category filters, and policy queries.
+- `GET /api/transactions`: Returns customer profiles and grouped transaction histories.
+- `POST /api/transactions`: Assesses and registers a new transaction against configured policy rules.
+- `POST /api/transactions/<id>/freeze-card`: Freezes the card associated with a medium or high-risk transaction.
+- `POST /api/transactions/<id>/escalate`: Routes a low-risk transaction for manual fraud analyst escalation.
