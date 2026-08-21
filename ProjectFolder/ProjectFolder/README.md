@@ -1,4 +1,4 @@
-# Sentinel — Transaction Decline Investigation Chatbot
+# RiskLens — Transaction Decline Investigation Chatbot
 
 A Python/Flask demo for explaining declined card transactions. The conversational interface normalizes transaction IDs, obtains structured evidence through repository services, calculates deterministic fraud signals, retrieves the three most relevant local policy sections, and returns a customer-friendly investigation card.
 
