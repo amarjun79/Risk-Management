@@ -1,0 +1,22 @@
+[
+  {
+    "section": "4.2 \u2014 Impossible Travel Velocity",
+    "text": "Decline or step up authentication when activity appears in geographically distant locations within a timeframe inconsistent with normal travel."
+  },
+  {
+    "section": "5.3 \u2014 Anonymizing Proxies",
+    "text": "Transactions originating from verified anonymizing proxies or Tor exit nodes require elevated fraud review and may be declined."
+  },
+  {
+    "section": "3.1 \u2014 Card-not-present Risk",
+    "text": "Card-not-present purchases receive additional risk assessment when location, device, or spending behavior differs from the customer profile."
+  },
+  {
+    "section": "2.4 \u2014 Amount Anomaly",
+    "text": "A transaction materially above the customer's established average amount is a fraud-risk indicator."
+  },
+  {
+    "section": "6.1 \u2014 Customer Resolution",
+    "text": "When a transaction is declined by automated controls, ask the customer to verify identity and contact the bank to authorize future activity."
+  }
+]
